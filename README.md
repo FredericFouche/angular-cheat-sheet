@@ -334,3 +334,127 @@ exemple de `*ngFor` :
   </li>
 </ul>
 ```
+
+## Recette : Construire un fichier de test Angular pas à pas
+
+> **Objectif :** disposer d’une checklist simple pour écrire, exécuter et maintenir des tests unitaires/environnementaux pour vos composants **et** services Angular.
+>
+> **Techno utilisées :** Jasmine (ou Jest), TestBed, HttpClientTestingModule, HttpTestingController.
+
+---
+
+### 🗺️ Vue d’ensemble du flux AAA
+
+| Étape       | But                                     | API principale                                       |
+|-------------|-----------------------------------------|------------------------------------------------------|
+| **Arrange** | Préparer l’environnement et les données | `TestBed`, `ComponentFixture`, stubs/spies           |
+| **Act**     | Lancer l’action à tester                | `detectChanges()`, appels de méthode, événements DOM |
+| **Assert**  | Vérifier le résultat attendu            | `expect()` + matchers Jasmine/Jest                   |
+
+Gardez ce triptyque en tête : il structure **chaque** `it()` que vous écrirez.
+
+---
+
+### 1️⃣ Préparer l’environnement
+
+```ts
+import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+```
+
+1. **Choisissez le type de test**
+   - *Composant* ? Vous aurez besoin de `ComponentFixture`.
+   - *Service HTTP* ? Ajoutez `HttpClientTestingModule`.
+2. **Imports/Declarations/Providers**
+   - Composant : `declarations: [MyComponent]` (ou `imports: [MyStandaloneComponent]`).
+   - Service : `providers: [MyService]`.
+3. **compileComponents()** si votre composant a un template externe.
+
+```ts
+beforeEach(async () => {
+  await TestBed.configureTestingModule({
+    imports: [HttpClientTestingModule],
+    providers: [SearchService]
+  }).compileComponents();
+});
+```
+
+---
+
+### 2️⃣ Créer l’instance / la fixture
+
+#### Composant
+```ts
+let fixture: ComponentFixture<MyComponent>;
+let component: MyComponent;
+
+fixture  = TestBed.createComponent(MyComponent);
+component = fixture.componentInstance;
+```
+
+#### Service
+```ts
+let service: SearchService;
+service = TestBed.inject(SearchService);
+```
+
+> **Astuce** : pour un service HTTP, récupérez aussi le contrôleur :
+> ```ts
+> const httpMock = TestBed.inject(HttpTestingController);
+> ```
+
+---
+
+### 3️⃣ Arrange – préparer les données
+
+- Renseignez les `@Input` ou les propriétés publiques :
+  ```ts
+  component.tag = { id: '1', name: 'Tag', slug: 'tag' };
+  ```
+- Mettez en place vos spies/mocks (`spyOn(service, 'method').and.returnValue(...)`).
+- Pour les services HTTP : préparez un tableau de réponses factices.
+
+---
+
+### 4️⃣ Act – déclencher l’action
+
+| Cas              | Action typique                                          |
+|------------------|---------------------------------------------------------|
+| Changer un input | `component.inputProp = value; fixture.detectChanges();` |
+| Méthode service  | `service.myMethod(arg).subscribe(...)`                  |
+| Événement DOM    | `button.click(); fixture.detectChanges();`              |
+
+---
+
+### 5️⃣ Assert – vérifier le résultat
+
+#### DOM / Composant
+```ts
+const span: HTMLSpanElement = fixture.nativeElement.querySelector('span');
+expect(span.textContent.trim()).toBe('Tag');
+```
+
+#### Service HTTP
+```ts
+const req = httpMock.expectOne(r => r.url.endsWith('/api/search') && r.params.get('q') === 'angular');
+req.flush(mockData);
+expect(received).toEqual(mockData);
+```
+
+N’oubliez pas **`httpMock.verify()`** dans un `afterEach` pour détecter les requêtes non traitées.
+
+---
+
+### 6️⃣ Nettoyage et bonnes pratiques
+
+- `afterEach(() => httpMock.verify());` pour les tests HTTP.
+- Utilisez `fdescribe`/`fit` pour focaliser pendant le dev, jamais en CI.
+- Paramétrez vos cas répétitifs :
+  ```ts
+  const cases: [string, string][] = [
+    ['red',   'bg-red-100'],
+    ['green', 'bg-green-100']
+  ];
+  cases.forEach(([color, cls]) => { /* … */ });
+  ```
+- Pensez à `fakeAsync`/`tick()` si v
